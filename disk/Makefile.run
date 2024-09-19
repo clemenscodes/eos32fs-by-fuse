@@ -31,5 +31,6 @@ $(MNT_DIR):
 
 clean:
 		rm -f *~
+		rm -f eos32fs.log
 		rm -f $(DSK_IMG)
 		rm -rf $(MNT_DIR)

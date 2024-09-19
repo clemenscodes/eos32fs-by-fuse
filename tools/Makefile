@@ -1,17 +1,16 @@
 #
-# Makefile for eos32fs-by-fuse project
+# Makefile for eos32fs tools
 #
 
-DIRS = doc tools disk src
+DIRS = cmpx
 
 .PHONY:		all $(DIRS) clean
 
 all:		$(DIRS)
 
 $(DIRS):
-		$(MAKE) -C $@ install
+		$(MAKE) -C $@ all
 
 clean:
 		for i in $(DIRS) ; do $(MAKE) -C $$i clean ; done
-		rm -rf build
 		rm -f *~

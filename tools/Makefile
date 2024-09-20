@@ -2,15 +2,24 @@
 # Makefile for eos32fs tools
 #
 
+BUILD = ../build
+
 DIRS = cmpx
 
-.PHONY:		all $(DIRS) clean
+.PHONY:		all install clean
 
-all:		$(DIRS)
+all:
+		for i in $(DIRS) ; do \
+		  $(MAKE) -C $$i all ; \
+		done
 
-$(DIRS):
-		$(MAKE) -C $@ all
+install:
+		for i in $(DIRS) ; do \
+		  $(MAKE) -C $$i install ; \
+		done
 
 clean:
-		for i in $(DIRS) ; do $(MAKE) -C $$i clean ; done
+		for i in $(DIRS) ; do \
+		  $(MAKE) -C $$i clean ; \
+		done
 		rm -f *~

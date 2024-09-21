@@ -4,8 +4,7 @@
 
 BUILD = ../build
 
-#DIRS = mkdisk mkpart shpart mkfs shfs
-DIRS = mkdisk mkgpt mkpart rmpart shgpt
+DIRS = mkdisk mkgpt mkpart rmpart shgpt mkfs shfs
 
 .PHONY:		all install clean
 

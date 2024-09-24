@@ -20,8 +20,6 @@ all:		$(BIN)
 install:	$(BIN)
 		mkdir -p $(BUILD)/bin
 		cp $(BIN) $(BUILD)/bin
-		mkdir -p $(BUILD)/run
-		cp disk.part $(BUILD)/run
 
 $(BIN):		$(OBJS)
 		$(CC) $(LDFLAGS) -o $(BIN) $(OBJS) $(LDLIBS)

@@ -13,16 +13,13 @@
 
 
 #define SECTOR_SIZE		512
-#define MIN_NUMBER_SECTORS	128
+#define MIN_NUMBER_SECTORS	4096
 #define SECTORS_PER_MB		((1 << 20) / SECTOR_SIZE)
 
 #define NUMBER_PART_ENTRIES	128
 #define SIZEOF_PART_ENTRY	128
 #define NUMBER_PART_BYTES	(NUMBER_PART_ENTRIES * SIZEOF_PART_ENTRY)
 #define NUMBER_PART_SECTORS	(NUMBER_PART_BYTES) / SECTOR_SIZE
-#define FIRST_MNGR_SECTOR	(2 + NUMBER_PART_SECTORS)
-#define NUMBER_MNGR_SECTORS	30
-#define FIRST_USABLE_SECTOR	(FIRST_MNGR_SECTOR + NUMBER_MNGR_SECTORS)
 
 
 typedef enum { false, true } bool;
@@ -369,7 +366,7 @@ void buildSortedTable(void) {
 }
 
 
-void recordGaps(unsigned int numSectors) {
+void recordGaps(unsigned int firstSector, unsigned int lastSector) {
   unsigned int prevTop;
   unsigned int currBase;
   unsigned int gapSize;
@@ -377,7 +374,7 @@ void recordGaps(unsigned int numSectors) {
   unsigned char *p;
 
   numGaps = 0;
-  prevTop = FIRST_USABLE_SECTOR;
+  prevTop = firstSector;
   for (i = 0; i < sortedEntries; i++) {
     p = &sortedTable[i * SIZEOF_PART_ENTRY];
     currBase = get4LE(p + 32);
@@ -394,7 +391,7 @@ void recordGaps(unsigned int numSectors) {
     }
     prevTop = get4LE(p + 40) + 1;
   }
-  currBase = numSectors;
+  currBase = lastSector + 1;
   if (currBase < prevTop) {
     /* topmost partition is too big */
     error("topmost partition is too big for disk");
@@ -402,7 +399,6 @@ void recordGaps(unsigned int numSectors) {
   gapSize = currBase - prevTop;
   if (gapSize != 0) {
     /* gap at end of topmost partition detected */
-    gapSize = numSectors - prevTop;
     gapTable[numGaps].addr = prevTop;
     gapTable[numGaps].size = gapSize;
     numGaps++;
@@ -421,9 +417,9 @@ void showGaps(void) {
 }
 
 
-void buildGapTable(unsigned int numSectors) {
+void buildGapTable(unsigned int firstSector, unsigned int lastSector) {
   buildSortedTable();
-  recordGaps(numSectors);
+  recordGaps(firstSector, lastSector);
   if (debugGaps) {
     showGaps();
   }
@@ -474,7 +470,8 @@ void mkPartition(FILE *disk,
                  char *partCode,
                  unsigned int partStart,
                  unsigned int partSize,
-                 unsigned int numSectors) {
+                 unsigned int firstSector,
+                 unsigned int lastSector) {
   int i;
   unsigned char *p;
   PartType *q;
@@ -512,7 +509,7 @@ void mkPartition(FILE *disk,
     error("partition type code '%s' not found in list", partCode);
   }
   /* search for (or verify) a gap where the partition can live */
-  buildGapTable(numSectors);
+  buildGapTable(firstSector, lastSector);
   if (partStart == 0) {
     /* search for a start sector with enough space following */
     partStart = findGap(partSize);
@@ -568,6 +565,8 @@ int main(int argc, char *argv[]) {
   FILE *disk;
   unsigned long diskSize;
   unsigned int numSectors;
+  unsigned int firstSector;
+  unsigned int lastSector;
 
   /* check command line arguments */
   if (argc == 2 && strcmp(argv[1], "--list") == 0) {
@@ -635,13 +634,18 @@ int main(int argc, char *argv[]) {
   printf("Disk '%s' has %u (0x%X) sectors.\n",
          diskName, numSectors, numSectors);
   if (numSectors < MIN_NUMBER_SECTORS) {
-    error("disk is too small to hold a partition table");
+    error("disk is too small to be useful (minimum size is %d sectors)",
+          MIN_NUMBER_SECTORS);
   }
   if (diskSize % SECTOR_SIZE != 0) {
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
   checkValidGPT(disk, numSectors);
-  mkPartition(disk, partNumber, partCode, partStart, partSize, numSectors);
+  firstSector = get4LE(&primaryTblHdr[40]);
+  lastSector = get4LE(&primaryTblHdr[48]);
+  mkPartition(disk, partNumber, partCode,
+              partStart, partSize,
+              firstSector, lastSector);
   writeValidGPT(disk);
   return 0;
 }

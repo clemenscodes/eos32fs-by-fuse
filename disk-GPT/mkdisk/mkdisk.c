@@ -12,7 +12,7 @@
 
 
 #define SECTOR_SIZE		512
-#define MIN_NUMBER_SECTORS	128
+#define MIN_NUMBER_SECTORS	4096
 #define SECTORS_PER_MB		((1 << 20) / SECTOR_SIZE)
 #define DATA_BYTE		0xE5
 
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     numSectors *= SECTORS_PER_MB;
   }
   if (numSectors < MIN_NUMBER_SECTORS) {
-    error("this disk is too small to be useful (minimum size is %d sectors)",
+    error("disk is too small to be useful (minimum size is %d sectors)",
           MIN_NUMBER_SECTORS);
   }
   dskFile = open(argv[1], O_CREAT | O_WRONLY, 0666);

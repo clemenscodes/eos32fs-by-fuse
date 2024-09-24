@@ -11,14 +11,14 @@
 
 
 #define SECTOR_SIZE		512
-#define MIN_NUMBER_SECTORS	128
+#define MIN_NUMBER_SECTORS	4096
 
 #define NUMBER_PART_ENTRIES	128
 #define SIZEOF_PART_ENTRY	128
 #define NUMBER_PART_BYTES	(NUMBER_PART_ENTRIES * SIZEOF_PART_ENTRY)
 #define NUMBER_PART_SECTORS	(NUMBER_PART_BYTES) / SECTOR_SIZE
 #define FIRST_MNGR_SECTOR	(2 + NUMBER_PART_SECTORS)
-#define NUMBER_MNGR_SECTORS	30
+#define NUMBER_MNGR_SECTORS	2014
 #define FIRST_USABLE_SECTOR	(FIRST_MNGR_SECTOR + NUMBER_MNGR_SECTORS)
 
 
@@ -377,7 +377,8 @@ int main(int argc, char *argv[]) {
   printf("Disk '%s' has %u (0x%X) sectors.\n",
          diskName, numSectors, numSectors);
   if (numSectors < MIN_NUMBER_SECTORS) {
-    error("disk is too small to hold a partition table");
+    error("disk is too small to be useful (minimum size is %d sectors)",
+          MIN_NUMBER_SECTORS);
   }
   if (diskSize % SECTOR_SIZE != 0) {
     printf("Warning: disk size is not a multiple of sector size!\n");

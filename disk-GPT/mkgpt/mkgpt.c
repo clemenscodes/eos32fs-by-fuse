@@ -18,8 +18,8 @@
 #define NUMBER_PART_BYTES	(NUMBER_PART_ENTRIES * SIZEOF_PART_ENTRY)
 #define NUMBER_PART_SECTORS	(NUMBER_PART_BYTES) / SECTOR_SIZE
 #define FIRST_MNGR_SECTOR	(2 + NUMBER_PART_SECTORS)
-#define NUMBER_MNGR_SECTORS	2014
-#define FIRST_USABLE_SECTOR	(FIRST_MNGR_SECTOR + NUMBER_MNGR_SECTORS)
+#define MAX_MNGR_SECTORS	2014
+#define FIRST_USABLE_SECTOR	(FIRST_MNGR_SECTOR + MAX_MNGR_SECTORS)
 
 
 /**************************************************************/
@@ -195,7 +195,9 @@ void makeProtectiveMBR(unsigned char *buf, unsigned int numSectors) {
 }
 
 
-void readBootCode(unsigned char *protMBR, char *bootName) {
+void readBootCode(unsigned char *protMBR,
+                  char *bootName,
+                  int mngrSectors) {
   FILE *boot;
   unsigned long bootSize;
 
@@ -219,10 +221,16 @@ void readBootCode(unsigned char *protMBR, char *bootName) {
   printf("Boot code (%lu bytes) read from file '%s'.\n",
          bootSize, bootName);
   fclose(boot);
+  /* patch number of manager sectors to be loaded */
+  /* note: this is ECO32 code, i.e., big-endian! */
+  protMBR[4] = (mngrSectors >> 24) & 0xFF;
+  protMBR[5] = (mngrSectors >> 16) & 0xFF;
+  protMBR[6] = (mngrSectors >>  8) & 0xFF;
+  protMBR[7] = (mngrSectors >>  0) & 0xFF;
 }
 
 
-void readMngrCode(unsigned char *mngrCode, char *mngrName) {
+int readMngrCode(unsigned char *mngrCode, char *mngrName) {
   FILE *mngr;
   unsigned long mngrSize;
   int mngrSectors;
@@ -237,9 +245,9 @@ void readMngrCode(unsigned char *mngrCode, char *mngrName) {
   mngrSize = ftell(mngr);
   fseek(mngr, 0, SEEK_SET);
   mngrSectors = (mngrSize + SECTOR_SIZE - 1) / SECTOR_SIZE;
-  if (mngrSectors > NUMBER_MNGR_SECTORS) {
+  if (mngrSectors > MAX_MNGR_SECTORS) {
     error("manager code '%s' is too big to fit (max %d sectors, has %d)",
-          mngrName, NUMBER_MNGR_SECTORS, mngrSectors);
+          mngrName, MAX_MNGR_SECTORS, mngrSectors);
   }
   /* read manager code */
   if (fread(mngrCode, 1, mngrSize, mngr) != mngrSize) {
@@ -247,7 +255,9 @@ void readMngrCode(unsigned char *mngrCode, char *mngrName) {
   }
   printf("Manager code (%lu bytes) read from file '%s'.\n",
          mngrSize, mngrName);
+  printf("%d/%d sectors used.\n", mngrSectors, MAX_MNGR_SECTORS);
   fclose(mngr);
+  return mngrSectors;
 }
 
 
@@ -341,7 +351,8 @@ int main(int argc, char *argv[]) {
   unsigned long diskSize;
   unsigned int numSectors;
   unsigned char protMBR[SECTOR_SIZE];
-  unsigned char mngrCode[NUMBER_MNGR_SECTORS * SECTOR_SIZE];
+  unsigned char mngrCode[MAX_MNGR_SECTORS * SECTOR_SIZE];
+  int mngrSectors;
   unsigned char partTblHdr[SECTOR_SIZE];
   unsigned char backupTblHdr[SECTOR_SIZE];
   unsigned char partTable[NUMBER_PART_BYTES];
@@ -383,23 +394,25 @@ int main(int argc, char *argv[]) {
   if (diskSize % SECTOR_SIZE != 0) {
     printf("Warning: disk size is not a multiple of sector size!\n");
   }
+  /* write boot manager */
+  if (mngrName != NULL) {
+    mngrSectors = readMngrCode(mngrCode, mngrName);
+    for (s = 0; s < mngrSectors; s++) {
+      wrSector(disk, FIRST_MNGR_SECTOR + s, &mngrCode[s * SECTOR_SIZE]);
+    }
+  } else {
+    mngrSectors = 0;
+  }
   /* write protective MBR */
   makeProtectiveMBR(protMBR, numSectors);
   if (bootName != NULL) {
-    readBootCode(protMBR, bootName);
+    readBootCode(protMBR, bootName, mngrSectors);
   }
   wrSector(disk, 0, protMBR);
   /* write primary partition table */
   partTableCRC = makePartTable(partTable);
   for (s = 0; s < NUMBER_PART_SECTORS; s++) {
     wrSector(disk, 2 + s, &partTable[s * SECTOR_SIZE]);
-  }
-  /* possibly write boot manager */
-  if (mngrName != NULL) {
-    readMngrCode(mngrCode, mngrName);
-    for (s = 0; s < NUMBER_MNGR_SECTORS; s++) {
-      wrSector(disk, FIRST_MNGR_SECTOR + s, &mngrCode[s * SECTOR_SIZE]);
-    }
   }
   /* write primary partition table header */
   makePartTblHdr(partTblHdr, numSectors, partTableCRC);

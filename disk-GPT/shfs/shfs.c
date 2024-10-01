@@ -514,11 +514,11 @@ int parseNumber(char **pc, unsigned int *pi) {
 
 int main(int argc, char *argv[]) {
   char *diskName;
-  unsigned int diskSize;
   FILE *disk;
+  unsigned int diskSize;
   int partNumber;
-  char *partType;
   char *endptr;
+  GptEntry entry;
   EOS32_daddr_t numBlocks;
   EOS32_daddr_t currBlock;
   unsigned char blockBuffer[BLOCK_SIZE];
@@ -532,7 +532,6 @@ int main(int argc, char *argv[]) {
            "    %s <disk> <part>\n"
            "        <disk>  disk image file\n"
            "        <part>  partition number\n"
-           "                0   search for first one with matching type\n"
            "                '*' treat whole disk as a single file system\n",
            argv[0]);
     exit(1);
@@ -555,10 +554,17 @@ int main(int argc, char *argv[]) {
     if (*endptr != '\0') {
       error("cannot read partition number '%s'", argv[2]);
     }
-    partType = EOS32_FS;
-    gptGetPartInfo(disk, diskSize,
-                   partNumber, partType,
-                   &fsStart, &fsSize);
+    gptRead(disk, diskSize);
+    gptGetEntry(partNumber, &entry);
+    if (strcmp(entry.type, GPT_NULL_UUID) == 0) {
+      error("partition %d is not used", partNumber);
+    }
+    if (strcmp(entry.type, "2736CFB2-27C3-40C6-AC7A-40A7BE06476D") != 0 &&
+        strcmp(entry.type, "36F2469F-834E-466E-9D2C-6D6F9664B1CB") != 0) {
+      error("partition %d is not an EOS32 file system", partNumber);
+    }
+    fsStart = entry.start;
+    fsSize = entry.end - entry.start + 1;
   }
   printf("File system space is %u (0x%X) sectors of %d bytes each.\n",
          fsSize, fsSize, SECTOR_SIZE);

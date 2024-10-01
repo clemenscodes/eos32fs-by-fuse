@@ -162,6 +162,16 @@ static void rdSector(FILE *disk, unsigned int sectorNum, unsigned char *buf) {
 }
 
 
+void wrSector(FILE *disk, unsigned int sectorNum, unsigned char *buf) {
+  if (fseek(disk, (unsigned long) sectorNum * SECTOR_SIZE, SEEK_SET) < 0) {
+    error("cannot position to sector %u (0x%X)", sectorNum, sectorNum);
+  }
+  if (fwrite(buf, 1, SECTOR_SIZE, disk) != SECTOR_SIZE) {
+    error("cannot write sector %u (0x%X)", sectorNum, sectorNum);
+  }
+}
+
+
 /**************************************************************/
 
 
@@ -192,7 +202,7 @@ static void checkProtMBR(FILE *disk) {
 }
 
 
-static void checkValidGPT(FILE *disk, unsigned int diskSize) {
+void gptRead(FILE *disk, unsigned int diskSize) {
   char signature[9];
   unsigned int oldHdrCRC;
   unsigned int newHdrCRC;
@@ -273,51 +283,94 @@ static void checkValidGPT(FILE *disk, unsigned int diskSize) {
 }
 
 
+void gptWrite(FILE *disk) {
+  unsigned int crc;
+  int s;
+  unsigned int backupLBAlo;
+
+  /* compute and store CRC of primary (and backup) table */
+  crc = crc32Sum(primaryTable, NUMBER_PART_BYTES);
+  put4LE(&primaryTblHdr[88], crc);
+  put4LE(&backupTblHdr[88], crc);
+  /* write primary table */
+  for (s = 0; s < NUMBER_PART_SECTORS; s++) {
+    wrSector(disk, 2 + s,
+             &primaryTable[s * SECTOR_SIZE]);
+  }
+  /* compute CRC of primary header, write primary header */
+  put4LE(&primaryTblHdr[16], 0);
+  crc = crc32Sum(primaryTblHdr, 92);
+  put4LE(&primaryTblHdr[16], crc);
+  wrSector(disk, 1, primaryTblHdr);
+  printf("Primary GPT written.\n");
+  /* write backup table (copy of primary table) */
+  backupLBAlo = get4LE(&primaryTblHdr[32]);
+  for (s = 0; s < NUMBER_PART_SECTORS; s++) {
+    wrSector(disk, backupLBAlo - NUMBER_PART_SECTORS + s,
+             &primaryTable[s * SECTOR_SIZE]);
+  }
+  /* compute CRC of backup header, write backup header */
+  put4LE(&backupTblHdr[16], 0);
+  crc = crc32Sum(backupTblHdr, 92);
+  put4LE(&backupTblHdr[16], crc);
+  wrSector(disk, backupLBAlo, backupTblHdr);
+  printf("Backup GPT written.\n");
+}
+
+
 /**************************************************************/
 
 
-void gptGetPartInfo(FILE *disk, unsigned int diskSize,
-                    int partNumber, char *partType,
-                    unsigned int *fsStart, unsigned int *fsSize) {
-  int i;
+void gptGetEntry(int partNumber, GptEntry *entry) {
   unsigned char *p;
-  uuid_t uuidBuf;
-  char uuidStr[40];
-  unsigned int startLBA;
-  unsigned int endLBA;
+  unsigned char uuidBuf[16];
+  int i;
+  char c;
 
-  checkValidGPT(disk, diskSize);
-  if (partNumber < 0 || partNumber > NUMBER_PART_ENTRIES) {
-    error("partition number must be in range %d..%d (inclusive), or 0",
-          1, NUMBER_PART_ENTRIES);
+  if (partNumber < 1 || partNumber > NUMBER_PART_ENTRIES) {
+    error("partition number out of range");
   }
-  if (partNumber == 0) {
-    /* search for the first partition with the right type */
-    for (i = 0; i < NUMBER_PART_ENTRIES; i++) {
-      p = &primaryTable[i * SIZEOF_PART_ENTRY];
-      uuid_copyLE(uuidBuf, p + 0);
-      uuid_unparse_upper(uuidBuf, uuidStr);
-      if (strcmp(uuidStr, partType) == 0) {
-        break;
-      }
+  p = &primaryTable[(partNumber - 1) * SIZEOF_PART_ENTRY];
+  uuid_copyLE(uuidBuf, p + 0);
+  uuid_unparse_upper(uuidBuf, entry->type);
+  uuid_copyLE(uuidBuf, p + 16);
+  uuid_unparse_upper(uuidBuf, entry->uniq);
+  entry->start = get4LE(p + 32);
+  entry->end = get4LE(p + 40);
+  entry->attr = get4LE(p + 48);
+  for (i = 0; i < 36; i++) {
+    c = *(p + 56 + 2 * i);
+    entry->name[i] = c;
+    if (c == 0) {
+      break;
     }
-    if (i == NUMBER_PART_ENTRIES) {
-      error("no partition with the requested type found");
-    }
-    partNumber = i + 1;
-    printf("First partition with the requested type is %d.\n", partNumber);
-  } else {
-    /* check if the requested partition has the right type */
-    p = &primaryTable[(partNumber - 1) * SIZEOF_PART_ENTRY];
-    uuid_copyLE(uuidBuf, p + 0);
-    uuid_unparse_upper(uuidBuf, uuidStr);
-    if (strcmp(uuidStr, partType) != 0) {
-      error("partition %d does not have the requested type", partNumber);
-    }
-    printf("Partition %d has the requested type.\n", partNumber);
   }
-  startLBA = get4LE(p + 32);
-  endLBA = get4LE(p + 40);
-  *fsStart = startLBA;
-  *fsSize = endLBA - startLBA + 1;
+}
+
+
+void gptSetEntry(int partNumber, GptEntry *entry) {
+  unsigned char *p;
+  unsigned char uuidBuf[16];
+  int i;
+  char c;
+
+  if (partNumber < 1 || partNumber > NUMBER_PART_ENTRIES) {
+    error("partition number out of range");
+  }
+  p = &primaryTable[(partNumber - 1) * SIZEOF_PART_ENTRY];
+  memset(p, 0, SIZEOF_PART_ENTRY);
+  uuid_parse(entry->type, uuidBuf);
+  uuid_copyLE(p + 0, uuidBuf);
+  uuid_parse(entry->uniq, uuidBuf);
+  uuid_copyLE(p + 16, uuidBuf);
+  put4LE(p + 32, entry->start);
+  put4LE(p + 40, entry->end);
+  put4LE(p + 48, entry->attr);
+  for (i = 0; i < 35; i++) {
+    c = entry->name[i];
+    *(p + 56 + 2 * i) = c;
+    if (c == 0) {
+      break;
+    }
+  }
 }

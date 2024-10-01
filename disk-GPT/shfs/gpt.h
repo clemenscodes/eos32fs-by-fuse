@@ -7,13 +7,26 @@
 #define _GPT_H_
 
 
-#define EOS32_FS	"2736CFB2-27C3-40C6-AC7A-40A7BE06476D"
-#define EOS32_SWAP	"C1BD6361-342D-486E-ABBC-3547549A95F6"
+#define GPT_UUID_LEN	37
+#define GPT_NAME_LEN	37
+
+#define GPT_NULL_UUID	"00000000-0000-0000-0000-000000000000"
 
 
-void gptGetPartInfo(FILE *disk, unsigned int diskSize,
-                    int partNumber, char *partType,
-                    unsigned int *fsStart, unsigned int *fsSize);
+typedef struct {
+  char type[GPT_UUID_LEN];
+  char uniq[GPT_UUID_LEN];
+  unsigned int start;
+  unsigned int end;
+  unsigned int attr;
+  char name[GPT_NAME_LEN];
+} GptEntry;
 
+
+void gptRead(FILE *disk, unsigned int diskSize);
+void gptWrite(FILE *disk);
+
+void gptGetEntry(int partNumber, GptEntry *entry);
+void gptSetEntry(int partNumber, GptEntry *entry);
 
 #endif /* _GPT_H_ */

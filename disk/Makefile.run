@@ -1,0 +1,55 @@
+#
+# Makefile to build a disk with a few partitions on it.
+# Two empty EOS32 file systems are generated on partitions 3 and 8.
+# Additional targets allow mounting and unmounting the file systems.
+#
+
+BUILD = ..
+
+DSK_IMG = disk.img
+DSK_SIZ = 902M
+MNT_DIR_3 = ./mnt_3
+MNT_DIR_8 = ./mnt_8
+
+all:		$(DSK_IMG)
+
+mount_3:	$(DSK_IMG) $(MNT_DIR_3)
+		$(BUILD)/bin/eos32fs $(DSK_IMG) 3 $(MNT_DIR_3)
+
+umount_3:
+		fusermount3 -u $(MNT_DIR_3)
+
+mount_8:	$(DSK_IMG) $(MNT_DIR_8)
+		$(BUILD)/bin/eos32fs $(DSK_IMG) 8 $(MNT_DIR_8)
+
+umount_8:
+		fusermount3 -u $(MNT_DIR_8)
+
+MKDISK = $(BUILD)/bin/mkdisk
+MKGPT = $(BUILD)/bin/mkgpt
+MKPART = $(BUILD)/bin/mkpart
+MKFS = $(BUILD)/bin/mkfs
+
+$(DSK_IMG):
+		$(MKDISK) $(DSK_IMG) $(DSK_SIZ)
+		$(MKGPT) $(DSK_IMG)
+		$(MKPART) $(DSK_IMG) EF00 50M 1
+		$(MKPART) $(DSK_IMG) 5A00 50M 3
+		$(MKPART) $(DSK_IMG) 5A01 50M 5
+		$(MKPART) $(DSK_IMG) 8300 50M 7
+		$(MKPART) $(DSK_IMG) 5A02 50M 8
+		$(MKPART) $(DSK_IMG) 8200 50M 9
+		$(MKFS) $(DSK_IMG) 3
+		$(MKFS) $(DSK_IMG) 8
+
+$(MNT_DIR_3):
+		mkdir -p $(MNT_DIR_3)
+
+$(MNT_DIR_8):
+		mkdir -p $(MNT_DIR_8)
+
+clean:
+		rm -f *~
+		rm -f eos32fs.log
+		rm -f $(DSK_IMG)
+		rm -rf $(MNT_DIR_3) $(MNT_DIR_8)

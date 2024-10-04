@@ -47,6 +47,19 @@ void warning(char *fmt, ...) {
 /**************************************************************/
 
 
+void usage(char *myself) {
+  printf("Usage:\n"
+         "    %s <disk> <part> <mnt> [<opts>]\n"
+         "        <disk>  disk image file\n"
+         "        <part>  partition number for EOS32 file system\n"
+         "                '*' treat whole disk as a single file system\n"
+         "        <mnt>   mount point (directory) for EOS32 file system\n"
+         "        <opts>  other mount options (for FUSE)\n",
+         myself);
+  exit(1);
+}
+
+
 int main(int argc, char *argv[]) {
   char *diskName;
   FILE *disk;
@@ -59,15 +72,7 @@ int main(int argc, char *argv[]) {
   unsigned int numBlocks;
 
   if (argc < 4) {
-    printf("Usage:\n"
-           "    %s <disk> <part> <mnt> [<opts>]\n"
-           "        <disk>  disk image file\n"
-           "        <part>  partition number for EOS32 file system\n"
-           "                '*' treat whole disk as a single file system\n"
-           "        <mnt>   mount point (directory) for EOS32 file system\n"
-           "        <opts>  other mount options (for FUSE)\n",
-           argv[0]);
-    exit(1);
+    usage(argv[0]);
   }
   diskName = argv[1];
   disk = fopen(diskName, "r+b");

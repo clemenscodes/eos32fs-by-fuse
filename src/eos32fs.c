@@ -8,7 +8,7 @@
 #include <string.h>
 #include <stdarg.h>
 #define FUSE_USE_VERSION	31
-#include <fuse.h>
+#include <fuse3/fuse.h>
 
 #include "gpt.h"
 

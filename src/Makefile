@@ -5,7 +5,7 @@
 BUILD = ../build
 
 CC = gcc
-CFLAGS = -g -Wall -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse3
+CFLAGS = -g -Wall -D_FILE_OFFSET_BITS=64
 LDFLAGS = -g
 LDLIBS = -luuid -lfuse3
 
